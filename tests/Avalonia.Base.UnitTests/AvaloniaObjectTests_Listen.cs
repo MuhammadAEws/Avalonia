@@ -3,9 +3,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reactive.Linq;
-using System.Reactive.Subjects;
 using Avalonia.Data;
 using Xunit;
 
@@ -14,22 +12,14 @@ namespace Avalonia.Base.UnitTests
     public class AvaloniaObjectTests_Listen
     {
         [Fact]
-        public void Listen_Fires_With_Initial_Value_Immediately()
+        public void Listen_Does_Not_Fire_Immediately()
         {
             var target = new Class1();
             var raised = 0;
 
-            target.Listen(Class1.FooProperty).Subscribe(x =>
-            {
-                Assert.Equal("foodefault", x.NewValue.Value);
-                Assert.False(x.OldValue.HasValue);
-                Assert.Equal(BindingPriority.Unset, x.Priority);
-                Assert.True(x.IsActiveValueChange);
-                Assert.False(x.IsOutdated);
-                ++raised;
-            });
+            target.Listen(Class1.FooProperty).Subscribe(_ => ++raised);
 
-            Assert.Equal(1, raised);
+            Assert.Equal(0, raised);
         }
 
         [Fact]
@@ -38,7 +28,7 @@ namespace Avalonia.Base.UnitTests
             var target = new Class1();
             var raised = 0;
 
-            target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
+            target.Listen(Class1.FooProperty).Subscribe(x =>
             {
                 Assert.Equal("newvalue", x.NewValue.Value);
                 Assert.Equal("foodefault", x.OldValue.Value);
@@ -54,12 +44,34 @@ namespace Avalonia.Base.UnitTests
         }
 
         [Fact]
-        public void Listener_Signals_Outdated_Change()
+        public void Listener_Fires_On_Non_Active_Property_Value_Change()
         {
             var target = new Class1();
             var raised = 0;
 
             target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
+            {
+                Assert.Equal("styled", x.NewValue.Value);
+                Assert.Equal("foodefault", x.OldValue.Value);
+                Assert.Equal(BindingPriority.Style, x.Priority);
+                Assert.False(x.IsActiveValueChange);
+                Assert.False(x.IsOutdated);
+                ++raised;
+            });
+
+            target.SetValue(Class1.FooProperty, "newvalue");
+            target.SetValue(Class1.FooProperty, "styled", BindingPriority.Style);
+
+            Assert.Equal(1, raised);
+        }
+
+        [Fact]
+        public void Listener_Signals_Outdated_Change()
+        {
+            var target = new Class1();
+            var raised = 0;
+
+            target.Listen(Class1.FooProperty).Subscribe(x =>
             {
                 if (x.NewValue.Value == "value1")
                 {
@@ -68,7 +80,7 @@ namespace Avalonia.Base.UnitTests
                 }
             });
 
-            target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
+            target.Listen(Class1.FooProperty).Subscribe(x =>
             {
                 // This handler was added after the handler which changes the value.
                 // It should receive both changes in order, with the first one marked
@@ -103,7 +115,7 @@ namespace Avalonia.Base.UnitTests
             target.Listen(Class1.FooProperty).Subscribe(x => result.Add(x.NewValue.Value));
             target.SetValue(Class1.BarProperty, "newvalue");
 
-            Assert.Equal(new[] { "foodefault" }, result);
+            Assert.Empty(result);
         }
 
         [Fact]
@@ -157,157 +169,6 @@ namespace Avalonia.Base.UnitTests
             Assert.Equal(BindingPriority.Style, change.Priority);
             Assert.True(change.IsActiveValueChange);
             Assert.False(change.IsOutdated);
-        }
-
-        public class NoAnimation
-        {
-            [Fact]
-            public void Listen_Initially_Fires_with_Default_Value_When_Only_Animated_Value_Present()
-            {
-                var target = new Class1();
-                var raised = 0;
-
-                target.SetValue(Class1.FooProperty, "a1", BindingPriority.Animation);
-
-                target.Listen(Class1.FooProperty, false).Subscribe(x =>
-                {
-                    Assert.Equal("foodefault", x.NewValue.Value);
-                    Assert.False(x.OldValue.HasValue);
-                    Assert.Equal(BindingPriority.Unset, x.Priority);
-                    Assert.True(x.IsActiveValueChange);
-                    Assert.False(x.IsOutdated);
-                    ++raised;
-                });
-
-                Assert.Equal(1, raised);
-            }
-
-            [Fact]
-            public void Listener_Fires_Only_On_Non_Animated_Property_Changes()
-            {
-                var target = new Class1();
-                var changes = new List<AvaloniaPropertyChangedEventArgs<string>>();
-
-                target.Listen(Class1.FooProperty, false).Skip(1).Subscribe(x => changes.Add(x));
-
-                target.SetValue(Class1.FooProperty, "a1", BindingPriority.Animation);
-                target.SetValue(Class1.FooProperty, "l1");
-                target.SetValue(Class1.FooProperty, "l2");
-                target.SetValue(Class1.FooProperty, "a2", BindingPriority.Animation);
-                target.SetValue(Class1.FooProperty, "l3");
-
-                Assert.Equal(new[] { "l1", "l2", "l3" }, changes.Select(x => x.NewValue.Value).ToList());
-                Assert.True(changes.All(x => !x.IsActiveValueChange));
-            }
-
-            [Fact]
-            public void Listener_Fires_Only_On_Non_Animated_Property_Changes_With_Binding_Added_Midway()
-            {
-                var target = new Class1();
-                var changes = new List<AvaloniaPropertyChangedEventArgs<string>>();
-                var style = new BehaviorSubject<BindingValue<string>>("s1");
-
-                target.Listen(Class1.FooProperty, false).Skip(1).Subscribe(x => changes.Add(x));
-
-                target.SetValue(Class1.FooProperty, "l1");
-                target.Bind(Class1.FooProperty, style, BindingPriority.Style);
-                target.SetValue(Class1.FooProperty, "a1", BindingPriority.Animation);
-                target.SetValue(Class1.FooProperty, "l2");
-                target.SetValue(Class1.FooProperty, "a2", BindingPriority.Animation);
-                target.SetValue(Class1.FooProperty, "l3");
-
-                Assert.Equal(new[] { "l1", "l2", "l3" }, changes.Select(x => x.NewValue.Value).ToList());
-                Assert.Equal(new[] { true, false, false }, changes.Select(x => x.IsActiveValueChange).ToList());
-            }
-
-            [Fact]
-            public void Listener_Fires_Only_On_Non_Animated_Binding_Property_Changes()
-            {
-                var target = new Class1();
-                var allChanges = new List<AvaloniaPropertyChangedEventArgs<string>>();
-                var nonAnimatedChanges = new List<AvaloniaPropertyChangedEventArgs<string>>();
-                var style = new Subject<BindingValue<string>>();
-                var animation = new Subject<BindingValue<string>>();
-                var templatedParent = new Subject<BindingValue<string>>();
-
-                target.Bind(Class1.FooProperty, style, BindingPriority.Style);
-                target.Bind(Class1.FooProperty, animation, BindingPriority.Animation);
-                target.Bind(Class1.FooProperty, templatedParent, BindingPriority.TemplatedParent);
-
-                target.Listen(Class1.FooProperty, true).Subscribe(x => allChanges.Add(x));
-                target.Listen(Class1.FooProperty, false).Subscribe(x => nonAnimatedChanges.Add(x));
-
-                style.OnNext("style1");
-                templatedParent.OnNext("tp1");
-                animation.OnNext("a1");
-                templatedParent.OnNext("tp2");
-                templatedParent.OnCompleted();
-                animation.OnNext("a2");
-                style.OnNext("style2");
-                style.OnCompleted();
-                animation.OnCompleted();
-
-                Assert.Equal(
-                    new[] { "foodefault", "style1", "tp1", "tp2", "style1", "style2", "foodefault" },
-                    nonAnimatedChanges.Select(x => x.NewValue.Value).ToList());
-                Assert.Equal(
-                    new[] { true, true, true, false, false, false, false },
-                    nonAnimatedChanges.Select(x => x.IsActiveValueChange).ToList());
-                Assert.Equal(
-                    new[] { "foodefault", "style1", "tp1", "a1", "a2", "foodefault" },
-                    allChanges.Select(x => x.NewValue.Value).ToList());
-                Assert.True(allChanges.All(x => x.IsActiveValueChange));
-            }
-
-            [Fact]
-            public void All_Property_Listener_Fires_Only_On_Non_Animated_Binding_Property_Changes()
-            {
-                var target = new Class1();
-                var allChanges = new AllPropertyListener();
-                var nonAnimatedChanges = new AllPropertyListener();
-                var style = new Subject<BindingValue<string>>();
-                var animation = new Subject<BindingValue<string>>();
-                var templatedParent = new Subject<BindingValue<string>>();
-
-                target.Bind(Class1.FooProperty, style, BindingPriority.Style);
-                target.Bind(Class1.FooProperty, animation, BindingPriority.Animation);
-                target.Bind(Class1.FooProperty, templatedParent, BindingPriority.TemplatedParent);
-
-                target.Listen(allChanges, true);
-                target.Listen(nonAnimatedChanges, false);
-
-                style.OnNext("style1");
-                templatedParent.OnNext("tp1");
-                animation.OnNext("a1");
-                templatedParent.OnNext("tp2");
-                templatedParent.OnCompleted();
-                animation.OnNext("a2");
-                style.OnNext("style2");
-                style.OnCompleted();
-                animation.OnCompleted();
-
-                Assert.Equal(
-                    new[] { "style1", "tp1", "tp2", "style1", "style2", "foodefault" },
-                    nonAnimatedChanges.Received
-                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
-                        .Select(x => x.NewValue.Value)
-                        .ToList());
-                Assert.Equal(
-                    new[] { true, true, false, false, false, false },
-                    nonAnimatedChanges.Received
-                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
-                        .Select(x => x.IsActiveValueChange)
-                        .ToList());
-                Assert.Equal(
-                    new[] { "style1", "tp1", "a1", "a2", "foodefault" },
-                    allChanges.Received
-                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
-                        .Select(x => x.NewValue.Value)
-                        .ToList());
-                Assert.True(allChanges.Received
-                    .Cast<AvaloniaPropertyChangedEventArgs<string>>()
-                    .All(x => x.IsActiveValueChange));
-            }
         }
 
         private class Class1 : AvaloniaObject

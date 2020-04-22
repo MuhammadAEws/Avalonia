@@ -65,6 +65,16 @@ namespace Avalonia.Reactive
             return new Direct(o, property);
         }
 
+        public Optional<T> GetValue()
+        {
+            if (_owner.TryGetTarget(out var owner))
+            {
+                return GetValue(owner);
+            }
+
+            return default;
+        }
+
         public void Signal(AvaloniaPropertyChangedEventArgs<T> change)
         {
             if (SignalCore(change) && _queue is object)
@@ -84,20 +94,6 @@ namespace Avalonia.Reactive
         
         protected override void Initialize() { }
         protected override void Deinitialize() { }
-
-        protected override void Subscribed(IObserver<AvaloniaPropertyChangedEventArgs<T>> observer, bool first)
-        {
-            if (_owner.TryGetTarget(out var owner))
-            {
-                var e = new AvaloniaPropertyChangedEventArgs<T>(
-                    owner,
-                    Property,
-                    default,
-                    GetValue(owner),
-                    BindingPriority.Unset);
-                observer.OnNext(e);
-            }
-        }
 
         private bool SignalCore(AvaloniaPropertyChangedEventArgs<T> change)
         {
@@ -136,6 +132,16 @@ namespace Avalonia.Reactive
 
             protected override void Initialize() => _subscription = _source.Subscribe(this);
             protected override void Deinitialize() => _subscription?.Dispose();
+
+            protected override void Subscribed(IObserver<T> observer, bool first)
+            {
+                var value = _source.GetValue();
+
+                if (value.HasValue)
+                {
+                    observer.OnNext(value.Value);
+                }
+            }
         }
 
         private class BindingValueSelector : LightweightObservableBase<BindingValue<T>>,
@@ -149,6 +155,16 @@ namespace Avalonia.Reactive
             public void OnNext(AvaloniaPropertyChangedEventArgs<T> value) => PublishNext(value.NewValue);
             protected override void Initialize() => _subscription = _source.Subscribe(this);
             protected override void Deinitialize() => _subscription?.Dispose();
+
+            protected override void Subscribed(IObserver<BindingValue<T>> observer, bool first)
+            {
+                var value = _source.GetValue();
+
+                if (value.HasValue)
+                {
+                    observer.OnNext(value.Value);
+                }
+            }
         }
 
         private class UntypedValueSelector : LightweightObservableBase<object?>,
@@ -170,6 +186,16 @@ namespace Avalonia.Reactive
 
             protected override void Initialize() => _subscription = _source.Subscribe(this);
             protected override void Deinitialize() => _subscription?.Dispose();
+
+            protected override void Subscribed(IObserver<object?> observer, bool first)
+            {
+                var value = _source.GetValue();
+
+                if (value.HasValue)
+                {
+                    observer.OnNext(value.Value);
+                }
+            }
         }
 
         private class Styled : AvaloniaPropertyObservable<T>

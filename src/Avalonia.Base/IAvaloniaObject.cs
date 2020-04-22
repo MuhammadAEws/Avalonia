@@ -26,33 +26,23 @@ namespace Avalonia
         void ClearValue<T>(DirectPropertyBase<T> property);
 
         /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/> value.
+        /// Listens to changes in an <see cref="AvaloniaProperty"/> on the object.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
         /// <returns>The listener observable.</returns>
-        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
-            StyledPropertyBase<T> property,
-            bool includeAnimations = true);
+        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(StyledPropertyBase<T> property);
 
         /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/> value.
+        /// Listens to changes in an <see cref="AvaloniaProperty"/> on the object.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
         /// <returns>The listener observable.</returns>
-        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
-            DirectPropertyBase<T> property,
-            bool includeAnimations = true);
+        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(DirectPropertyBase<T> property);
 
         /// <summary>
-        /// Adds a listener for all <see cref="AvaloniaProperty"/> value changes.
+        /// Listens to changes in all <see cref="AvaloniaProperty"/>s on the object.
         /// </summary>
         /// <param name="listener">The listener.</param>
         /// <param name="includeAnimations">

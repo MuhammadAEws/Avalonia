@@ -309,17 +309,12 @@ namespace Avalonia
         }
 
         /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/> value.
+        /// Gets a listener for an <see cref="AvaloniaProperty"/>.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
         /// <returns>The listener observable.</returns>
-        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
-            StyledPropertyBase<T> property,
-            bool includeAnimations = true)
+        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(StyledPropertyBase<T> property)
         {
             property = property ?? throw new ArgumentNullException(nameof(property));
 
@@ -336,17 +331,12 @@ namespace Avalonia
         }
 
         /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/> value.
+        /// Gets a listener for an <see cref="AvaloniaProperty"/>.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
         /// <returns>The listener observable.</returns>
-        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
-            DirectPropertyBase<T> property,
-            bool includeAnimations = true)
+        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(DirectPropertyBase<T> property)
         {
             property = property ?? throw new ArgumentNullException(nameof(property));
 
