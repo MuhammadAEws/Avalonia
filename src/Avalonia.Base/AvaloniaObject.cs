@@ -275,7 +275,7 @@ namespace Avalonia
             property = property ?? throw new ArgumentNullException(nameof(property));
             VerifyAccess();
 
-            return GetValueOrInheritedOrDefault(property, false);
+            return GetValueOrInheritedOrDefault(property, BindingPriority.LocalValue);
         }
 
         /// <summary>
@@ -730,7 +730,7 @@ namespace Avalonia
 
         private T GetValueOrInheritedOrDefault<T>(
             StyledPropertyBase<T> property,
-            bool includeAnimations = true)
+            BindingPriority maxPriority = BindingPriority.Animation)
         {
             var o = this;
             var inherits = property.Inherits;
@@ -740,7 +740,7 @@ namespace Avalonia
             {
                 var values = o._values;
 
-                if (values?.TryGetValue(property, includeAnimations, out value) == true)
+                if (values?.TryGetValue(property, maxPriority, out value) == true)
                 {
                     return value;
                 }

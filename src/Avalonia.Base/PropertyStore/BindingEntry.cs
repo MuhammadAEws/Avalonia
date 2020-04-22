@@ -42,11 +42,10 @@ namespace Avalonia.PropertyStore
         public BindingPriority Priority { get; }
         public IObservable<BindingValue<T>> Source { get; }
         Optional<object> IValue.GetValue() => _value.ToObject();
-        BindingPriority IValue.ValuePriority => Priority;
 
-        public Optional<T> GetValue(bool includeAnimations)
+        public Optional<T> GetValue(BindingPriority maxPriority)
         {
-            return includeAnimations || Priority > BindingPriority.Animation ? _value : default;
+            return Priority >= maxPriority ? _value : default;
         }
 
         public void Dispose()

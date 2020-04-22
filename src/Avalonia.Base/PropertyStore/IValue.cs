@@ -10,7 +10,7 @@ namespace Avalonia.PropertyStore
     internal interface IValue
     {
         Optional<object> GetValue();
-        BindingPriority ValuePriority { get; }
+        BindingPriority Priority { get; }
     }
 
     /// <summary>
@@ -19,6 +19,6 @@ namespace Avalonia.PropertyStore
     /// <typeparam name="T">The property type.</typeparam>
     internal interface IValue<T> : IValue
     {
-        Optional<T> GetValue(bool includeAnimations);
+        Optional<T> GetValue(BindingPriority maxPriority = BindingPriority.Animation);
     }
 }

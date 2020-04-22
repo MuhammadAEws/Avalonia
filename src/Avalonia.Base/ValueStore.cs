@@ -38,7 +38,7 @@ namespace Avalonia
         {
             if (_values.TryGetValue(property, out var slot))
             {
-                return slot.ValuePriority < BindingPriority.LocalValue;
+                return slot.Priority < BindingPriority.LocalValue;
             }
 
             return false;
@@ -56,12 +56,12 @@ namespace Avalonia
 
         public bool TryGetValue<T>(
             StyledPropertyBase<T> property,
-            bool includeAnimations,
+            BindingPriority maxPriority,
             out T value)
         {
             if (_values.TryGetValue(property, out var slot))
             {
-                var v = ((IValue<T>)slot).GetValue(includeAnimations);
+                var v = ((IValue<T>)slot).GetValue(maxPriority);
 
                 if (v.HasValue)
                 {
@@ -154,7 +154,7 @@ namespace Avalonia
 
                     if (remove)
                     {
-                        var old = TryGetValue(property, true, out var value) ? value : default;
+                        var old = TryGetValue(property, BindingPriority.LocalValue, out var value) ? value : default;
                         _values.Remove(property);
                         _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                             _owner,
@@ -186,7 +186,7 @@ namespace Avalonia
                 return new Diagnostics.AvaloniaPropertyValue(
                     property,
                     slotValue.HasValue ? slotValue.Value : AvaloniaProperty.UnsetValue,
-                    slot.ValuePriority,
+                    slot.Priority,
                     null);
             }
 
@@ -235,7 +235,7 @@ namespace Avalonia
             {
                 if (priority == BindingPriority.LocalValue)
                 {
-                    var old = l.GetValue(true);
+                    var old = l.GetValue(BindingPriority.LocalValue);
                     l.SetValue(value);
                     _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                         _owner,

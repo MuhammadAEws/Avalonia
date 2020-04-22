@@ -25,7 +25,6 @@ namespace Avalonia.PropertyStore
         private readonly List<IPriorityValueEntry<T>> _entries = new List<IPriorityValueEntry<T>>();
         private readonly Func<IAvaloniaObject, T, T>? _coerceValue;
         private Optional<T> _localValue;
-        private Optional<T> _nonAnimatedValue;
         private Optional<T> _value;
 
         public PriorityValue(
@@ -54,19 +53,12 @@ namespace Avalonia.PropertyStore
             existing.Reparent(this);
             _entries.Add(existing);
 
-            var v = existing.GetValue(true);
+            var v = existing.GetValue();
             
             if (v.HasValue)
             {
                 _value = v;
-                ValuePriority = existing.Priority;
-            }
-
-            v = existing.GetValue(false);
-
-            if (v.HasValue)
-            {
-                _nonAnimatedValue = existing.GetValue(false);
+                Priority = existing.Priority;
             }
         }
 
@@ -77,20 +69,30 @@ namespace Avalonia.PropertyStore
             LocalValueEntry<T> existing)
             : this(owner, property, sink)
         {
-            _value = _nonAnimatedValue = _localValue = existing.GetValue(false);
-            ValuePriority = BindingPriority.LocalValue;
+            _value = _localValue = existing.GetValue(BindingPriority.LocalValue);
+            Priority = BindingPriority.LocalValue;
         }
 
         public StyledPropertyBase<T> Property { get; }
-        public BindingPriority ValuePriority { get; private set; }
+        public BindingPriority Priority { get; private set; } = BindingPriority.Unset;
         public IReadOnlyList<IPriorityValueEntry<T>> Entries => _entries;
         Optional<object> IValue.GetValue() => _value.ToObject();
 
         public void ClearLocalValue() => UpdateEffectiveValue();
 
-        public Optional<T> GetValue(bool includeAnimations)
+        public Optional<T> GetValue(BindingPriority maxPriority = BindingPriority.Animation)
         {
-            return includeAnimations ? _value : _nonAnimatedValue;
+            if (Priority == BindingPriority.Unset)
+            {
+                return default;
+            }
+
+            if (Priority >= maxPriority)
+            {
+                return _value;
+            }
+
+            return CalculateValue(maxPriority).Item1;
         }
 
         public IDisposable? SetValue(T value, BindingPriority priority)
@@ -158,73 +160,67 @@ namespace Avalonia.PropertyStore
             return result;
         }
 
-        private void UpdateEffectiveValue()
+        public (Optional<T>, BindingPriority) CalculateValue(BindingPriority maxPriority)
         {
             var reachedLocalValues = false;
-            var value = default(Optional<T>);
-
-            bool LoadLocalValue()
-            {
-                if (_localValue.HasValue)
-                {
-                    if (!value.HasValue)
-                    {
-                        value = _localValue;
-                        ValuePriority = BindingPriority.LocalValue;
-                    }
-                }
-
-                return _localValue.HasValue;
-            }
 
             for (var i = _entries.Count - 1; i >= 0; --i)
             {
                 var entry = _entries[i];
 
-                if (!reachedLocalValues && entry.Priority >= BindingPriority.LocalValue)
+                if (entry.Priority < maxPriority)
                 {
-                    reachedLocalValues = true;
-
-                    if (LoadLocalValue())
-                    {
-                        break;
-                    }
+                    continue;
                 }
 
-                var entryValue = entry.GetValue(true);
+                if (!reachedLocalValues &&
+                    entry.Priority >= BindingPriority.LocalValue &&
+                    maxPriority <= BindingPriority.LocalValue &&
+                    _localValue.HasValue)
+                {
+                    return (_localValue, BindingPriority.LocalValue);
+                }
+
+                var entryValue = entry.GetValue();
 
                 if (entryValue.HasValue)
                 {
-                    if (!value.HasValue)
-                    {
-                        value = entry.GetValue(true);
-                        ValuePriority = entry.Priority;
-                    }
+                    return (entryValue, entry.Priority);
                 }
             }
 
-            LoadLocalValue();
+            if (!reachedLocalValues &&
+                maxPriority <= BindingPriority.LocalValue &&
+                _localValue.HasValue)
+            {
+                return (_localValue, BindingPriority.LocalValue);
+            }
+
+            return (default, BindingPriority.Unset);
+        }
+
+        private void UpdateEffectiveValue()
+        {
+            var (value, priority) = CalculateValue(BindingPriority.Animation);
 
             if (value.HasValue && _coerceValue != null)
             {
                 value = _coerceValue(_owner, value.Value);
             }
+
+            Priority = priority;
+
             if (value != _value)
             {
                 var old = _value;
                 _value = value;
-
-                if (ValuePriority > BindingPriority.Animation)
-                {
-                    _nonAnimatedValue = value;
-                }
 
                 _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                     _owner,
                     Property,
                     old,
                     value,
-                    ValuePriority));
+                    Priority));
             }
         }
     }

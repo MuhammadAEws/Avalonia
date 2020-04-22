@@ -30,11 +30,10 @@ namespace Avalonia.PropertyStore
         public StyledPropertyBase<T> Property { get; }
         public BindingPriority Priority { get; }
         Optional<object> IValue.GetValue() => _value.ToObject();
-        BindingPriority IValue.ValuePriority => Priority;
 
-        public Optional<T> GetValue(bool includeAnimations)
+        public Optional<T> GetValue(BindingPriority maxPriority = BindingPriority.Animation)
         {
-            return includeAnimations || Priority > BindingPriority.Animation ? _value : default;
+            return Priority >= maxPriority ? _value : default;
         }
 
         public void Dispose() => _sink.Completed(Property, this, _value);

@@ -14,9 +14,14 @@ namespace Avalonia.PropertyStore
         private T _value;
 
         public LocalValueEntry(T value) => _value = value;
-        public BindingPriority ValuePriority => BindingPriority.LocalValue;
+        public BindingPriority Priority => BindingPriority.LocalValue;
         Optional<object> IValue.GetValue() => new Optional<object>(_value);
-        public Optional<T> GetValue(bool includeAnimations) => _value;
+        
+        public Optional<T> GetValue(BindingPriority maxPriority)
+        {
+            return BindingPriority.LocalValue >= maxPriority ? _value : default;
+        }
+
         public void SetValue(T value) => _value = value;
     }
 }
