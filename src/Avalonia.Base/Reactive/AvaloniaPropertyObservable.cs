@@ -82,6 +82,12 @@ namespace Avalonia.Reactive
                 while (_queue.Count > 0)
                 {
                     var queuedChange = _queue.Dequeue();
+
+                    if (_queue.Count != 0)
+                    {
+                        queuedChange.MarkOutdated();
+                    }
+
                     SignalCore(queuedChange);
                 }
 
@@ -152,7 +158,15 @@ namespace Avalonia.Reactive
             public BindingValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
             public void OnCompleted() { }
             public void OnError(Exception error) { }
-            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value) => PublishNext(value.NewValue);
+
+            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
+            {
+                if (value.IsActiveValueChange && !value.IsOutdated)
+                {
+                    PublishNext(value.NewValue);
+                }
+            }
+
             protected override void Initialize() => _subscription = _source.Subscribe(this);
             protected override void Deinitialize() => _subscription?.Dispose();
 

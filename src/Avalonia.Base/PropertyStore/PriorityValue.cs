@@ -162,8 +162,6 @@ namespace Avalonia.PropertyStore
         {
             var reachedLocalValues = false;
             var value = default(Optional<T>);
-            var nonAnimatedValue = default(Optional<T>);
-            var nonAnimatedValuePriority = BindingPriority.Unset;
 
             bool LoadLocalValue()
             {
@@ -173,12 +171,6 @@ namespace Avalonia.PropertyStore
                     {
                         value = _localValue;
                         ValuePriority = BindingPriority.LocalValue;
-                    }
-
-                    if (!nonAnimatedValue.HasValue)
-                    {
-                        nonAnimatedValue = _localValue;
-                        nonAnimatedValuePriority = BindingPriority.LocalValue;
                     }
                 }
 
@@ -208,17 +200,6 @@ namespace Avalonia.PropertyStore
                         value = entry.GetValue(true);
                         ValuePriority = entry.Priority;
                     }
-
-                    if (entry.Priority > BindingPriority.Animation)
-                    {
-                        nonAnimatedValue = entryValue;
-                        nonAnimatedValuePriority = entry.Priority;
-                    }
-                }
-
-                if (value.HasValue && nonAnimatedValue.HasValue)
-                {
-                    break;
                 }
             }
 
@@ -228,12 +209,6 @@ namespace Avalonia.PropertyStore
             {
                 value = _coerceValue(_owner, value.Value);
             }
-
-            if (nonAnimatedValue.HasValue && _coerceValue != null)
-            {
-                nonAnimatedValue = _coerceValue(_owner, nonAnimatedValue.Value);
-            }
-
             if (value != _value)
             {
                 var old = _value;
@@ -250,23 +225,6 @@ namespace Avalonia.PropertyStore
                     old,
                     value,
                     ValuePriority));
-            }
-
-            if (nonAnimatedValue != _nonAnimatedValue && ValuePriority < BindingPriority.LocalValue)
-            {
-                var old = _nonAnimatedValue;
-                _nonAnimatedValue = nonAnimatedValue;
-
-                if (_nonAnimatedValue != _value)
-                {
-                    _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
-                        _owner,
-                        Property,
-                        old,
-                        nonAnimatedValue,
-                        nonAnimatedValuePriority,
-                        false));
-                }
             }
         }
     }
