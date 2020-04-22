@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using Avalonia.Data;
 using Xunit;
 
@@ -52,7 +54,7 @@ namespace Avalonia.Base.UnitTests
             target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
             {
                 Assert.Equal("styled", x.NewValue.Value);
-                Assert.Equal("foodefault", x.OldValue.Value);
+                Assert.False(x.OldValue.HasValue);
                 Assert.Equal(BindingPriority.Style, x.Priority);
                 Assert.False(x.IsActiveValueChange);
                 Assert.False(x.IsOutdated);
@@ -63,6 +65,42 @@ namespace Avalonia.Base.UnitTests
             target.SetValue(Class1.FooProperty, "styled", BindingPriority.Style);
 
             Assert.Equal(1, raised);
+        }
+
+        [Fact]
+        public void Listener_Fires_On_All_Binding_Property_Changes()
+        {
+            var target = new Class1();
+            var changes = new List<AvaloniaPropertyChangedEventArgs<string>>();
+            var style = new Subject<BindingValue<string>>();
+            var animation = new Subject<BindingValue<string>>();
+            var templatedParent = new Subject<BindingValue<string>>();
+
+            target.Bind(Class1.FooProperty, style, BindingPriority.Style);
+            target.Bind(Class1.FooProperty, animation, BindingPriority.Animation);
+            target.Bind(Class1.FooProperty, templatedParent, BindingPriority.TemplatedParent);
+
+            target.Listen(Class1.FooProperty).Subscribe(x => changes.Add(x));
+
+            style.OnNext("style1");
+            templatedParent.OnNext("tp1");
+            animation.OnNext("a1");
+            templatedParent.OnNext("tp2");
+            templatedParent.OnCompleted();
+            animation.OnNext("a2");
+            style.OnNext("style2");
+            style.OnCompleted();
+            animation.OnCompleted();
+
+            Assert.Equal(
+                new[] { true, true, true, false, false, true, false, false, true },
+                changes.Select(x => x.IsActiveValueChange).ToList());
+            Assert.Equal(
+                new[] { "style1", "tp1", "a1", "tp2", "$unset", "a2", "style2", "$unset", "foodefault" },
+                changes.Select(x => x.NewValue.GetValueOrDefault("$unset")).ToList());
+            Assert.Equal(
+                new[] { "foodefault", "style1", "tp1", "$unset", "$unset", "a1", "$unset", "$unset", "a2" },
+                changes.Select(x => x.OldValue.GetValueOrDefault("$unset")).ToList());
         }
 
         [Fact]

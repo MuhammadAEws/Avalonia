@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Reactive.Disposables;
 using Avalonia.Data;
 using Avalonia.Diagnostics;
 using Avalonia.Logging;
@@ -26,7 +27,7 @@ namespace Avalonia
         private List<IAvaloniaObject> _inheritanceChildren;
         private ValueStore _values;
         private AvaloniaPropertyValueStore<object> _listeners;
-        private List<AllPropertyListener> _allPropertyListeners;
+        private List<IAvaloniaPropertyListener> _allPropertyListeners;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AvaloniaObject"/> class.
@@ -356,19 +357,13 @@ namespace Avalonia
         /// Adds a listener for all <see cref="AvaloniaProperty"/> value changes.
         /// </summary>
         /// <param name="listener">The listener.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
-        public IDisposable Listen(
-            IAvaloniaPropertyListener listener,
-            bool includeAnimations = true)
+        public IDisposable Listen(IAvaloniaPropertyListener listener)
         {
             listener = listener ?? throw new ArgumentNullException(nameof(listener));
 
-            var result = new AllPropertyListener(this, listener, includeAnimations);
-            _allPropertyListeners ??= new List<AllPropertyListener>();
-            _allPropertyListeners.Add(result);
-            return result;
+            _allPropertyListeners ??= new List<IAvaloniaPropertyListener>();
+            _allPropertyListeners.Add(listener);
+            return Disposable.Create(() => _allPropertyListeners.Remove(listener));
         }
 
         /// <summary>
@@ -543,29 +538,35 @@ namespace Avalonia
         void IValueSink.ValueChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             var property = (StyledPropertyBase<T>)change.Property;
-            var oldValue = change.OldValue.HasValue ? change.OldValue : GetInheritedOrDefault<T>(property);
-            var newValue = change.NewValue.HasValue ? change.NewValue : change.NewValue.WithValue(GetInheritedOrDefault(property));
 
-            LogIfError(property, newValue);
+            LogIfError(property, change.NewValue);
 
-            if (!EqualityComparer<T>.Default.Equals(oldValue.Value, newValue.Value))
+            if (change.IsActiveValueChange && !change.OldValue.HasValue)
             {
-                RaisePropertyChanged(new AvaloniaPropertyChangedEventArgs<T>(
-                    this,
-                    property,
-                    oldValue,
-                    newValue,
-                    change.Priority,
-                    change.IsActiveValueChange));
+                change.SetOldValue(GetInheritedOrDefault<T>(property));
+            }
 
-                Logger.TryGet(LogEventLevel.Verbose)?.Log(
-                    LogArea.Property,
-                    this,
-                    "{Property} changed from {$Old} to {$Value} with priority {Priority}",
-                    property,
-                    oldValue,
-                    newValue,
-                    change.Priority);
+            if (change.IsActiveValueChange && !change.NewValue.HasValue)
+            {
+                change.SetNewValue(GetInheritedOrDefault(property));
+            }
+
+            if (!change.IsActiveValueChange ||
+                !EqualityComparer<T>.Default.Equals(change.OldValue.Value, change.NewValue.Value))
+            {
+                RaisePropertyChanged(change);
+
+                if (change.IsActiveValueChange && !change.IsOutdated)
+                {
+                    Logger.TryGet(LogEventLevel.Verbose)?.Log(
+                        LogArea.Property,
+                        this,
+                        "{Property} changed from {$Old} to {$Value} with priority {Priority}",
+                        property,
+                        change.OldValue,
+                        change.NewValue,
+                        change.Priority);
+                }
             }
         }
 
@@ -764,25 +765,8 @@ namespace Avalonia
 
             try
             {
-                AvaloniaPropertyChangedEventArgs<T> e = null;
-                var hasChanged = change.Property.HasChangedSubscriptions;
-
-                if (hasChanged || _propertyChanged != null)
-                {
-                    e = new AvaloniaPropertyChangedEventArgs<T>(
-                        this,
-                        change.Property,
-                        change.OldValue,
-                        change.NewValue,
-                        change.Priority);
-                }
-
                 OnPropertyChanged(change);
-
-                if (hasChanged)
-                {
-                    change.Property.NotifyChanged(e);
-                }
+                change.Property.NotifyChanged(change);
 
                 if (_listeners is object && _listeners.TryGetValue(change.Property, out var listener))
                 {
@@ -793,36 +777,29 @@ namespace Avalonia
                 {
                     foreach (var entry in _allPropertyListeners)
                     {
-                        if (entry.IncludeAnimations)
-                        {
-                            if (change.IsActiveValueChange)
-                            {
-                                entry.Listener.PropertyChanged(change);
-                            }
-                        }
-                        else if (change.Priority > BindingPriority.Animation)
-                        {
-                            entry.Listener.PropertyChanged(change);
-                        }
+                        entry.PropertyChanged(change);
                     }
                 }
 
-                _propertyChanged?.Invoke(this, e);
-
-                if (_inpcChanged != null)
+                if (change.IsActiveValueChange && !change.IsOutdated)
                 {
-                    var inpce = new PropertyChangedEventArgs(change.Property.Name);
-                    _inpcChanged(this, inpce);
-                }
+                    _propertyChanged?.Invoke(this, change);
 
-                if (change.Property.Inherits && _inheritanceChildren != null)
-                {
-                    foreach (var child in _inheritanceChildren)
+                    if (_inpcChanged != null)
                     {
-                        child.InheritedPropertyChanged(
-                            change.Property,
-                            change.OldValue,
-                            change.NewValue.ToOptional());
+                        var inpce = new PropertyChangedEventArgs(change.Property.Name);
+                        _inpcChanged(this, inpce);
+                    }
+
+                    if (change.Property.Inherits && _inheritanceChildren != null)
+                    {
+                        foreach (var child in _inheritanceChildren)
+                        {
+                            child.InheritedPropertyChanged(
+                                change.Property,
+                                change.OldValue,
+                                change.NewValue.ToOptional());
+                        }
                     }
                 }
             }
@@ -983,26 +960,6 @@ namespace Avalonia
                     Dispatcher.UIThread.Post(() => instance.SetDirectValueUnchecked(property, newValue));
                 }
             }
-        }
-
-        private class AllPropertyListener : IDisposable
-        {
-            private readonly AvaloniaObject _owner;
-
-            public AllPropertyListener(
-                AvaloniaObject owner,
-                IAvaloniaPropertyListener listener,
-                bool includeAnimations)
-            {
-                _owner = owner;
-                Listener = listener;
-                IncludeAnimations = includeAnimations;
-            }
-
-            public IAvaloniaPropertyListener Listener { get; }
-            public bool IncludeAnimations { get; }
-
-            public void Dispose() => _owner._allPropertyListeners.Remove(this);
         }
     }
 }

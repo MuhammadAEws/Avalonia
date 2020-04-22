@@ -17,25 +17,19 @@ namespace Avalonia
         /// <param name="oldValue">The old value of the property.</param>
         /// <param name="newValue">The new value of the property.</param>
         /// <param name="priority">The priority of the binding that produced the value.</param>
-        /// <param name="isActiveValueChange">
-        /// Whether the change represents a change to the active value.
-        /// </param>
-        /// <param name="isOutdated">Whether the value is outdated.</param>
         public AvaloniaPropertyChangedEventArgs(
             IAvaloniaObject sender,
             AvaloniaProperty<T> property,
             Optional<T> oldValue,
             BindingValue<T> newValue,
-            BindingPriority priority,
-            bool isActiveValueChange = true,
-            bool isOutdated = false)
+            BindingPriority priority)
             : base(sender, priority)
         {
             Property = property;
             OldValue = oldValue;
             NewValue = newValue;
-            IsActiveValueChange = isActiveValueChange;
-            IsOutdated = isOutdated;
+            IsActiveValueChange = true;
+            IsOutdated = false;
         }
 
         /// <summary>
@@ -49,17 +43,20 @@ namespace Avalonia
         /// <summary>
         /// Gets the old value of the property.
         /// </summary>
-        /// <value>
-        /// The old value of the property.
-        /// </value>
+        /// <remarks>
+        /// When <see cref="IsActiveValueChange"/> is true, returns the old value of the property on the
+        /// object. When <see cref="IsActiveValueChange"/> is false, returns <see cref="Optional{T}.Empty"/>.
+        /// </remarks>
         public new Optional<T> OldValue { get; private set; }
 
         /// <summary>
         /// Gets the new value of the property.
         /// </summary>
-        /// <value>
-        /// The new value of the property.
-        /// </value>
+        /// <remarks>
+        /// When <see cref="IsActiveValueChange"/> is true, returns the value of the property on the
+        /// object. When <see cref="IsActiveValueChange"/> is false returns the changed value, or
+        /// <see cref="Optional{T}.Empty"/> if the value was removed.
+        /// </remarks>
         public new BindingValue<T> NewValue { get; private set; }
 
         /// <summary>
@@ -67,10 +64,12 @@ namespace Avalonia
         /// the property.
         /// </summary>
         /// <remarks>
-        /// If the Listen call requested to not include animation changes then <see cref="NewValue"/>
-        /// may not represent a change to the active value of the property on the object.
+        /// A property listener created via <see cref="IAvaloniaObject.Listen{T}(StyledPropertyBase{T})"/>
+        /// signals all property changes, regardless of whether a value with a higer priority is present.
+        /// When this property is false, the change that is being signalled has not resulted in a change
+        /// to the property value on the object.
         /// </remarks>
-        public bool IsActiveValueChange { get; }
+        public bool IsActiveValueChange { get; private set; }
 
         /// <summary>
         /// Gets a value indicating whether the value of the property on the object has already
@@ -79,6 +78,9 @@ namespace Avalonia
         public bool IsOutdated { get; private set; }
 
         internal void MarkOutdated() => IsOutdated = true;
+        internal void MarkInactiveValue() => IsActiveValueChange = false;
+        internal void SetOldValue(Optional<T> value) => OldValue = value;
+        internal void SetNewValue(BindingValue<T> value) => NewValue = value;
 
         protected override AvaloniaProperty GetProperty() => Property;
 

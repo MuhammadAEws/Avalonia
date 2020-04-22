@@ -45,12 +45,7 @@ namespace Avalonia
         /// Listens to changes in all <see cref="AvaloniaProperty"/>s on the object.
         /// </summary>
         /// <param name="listener">The listener.</param>
-        /// <param name="includeAnimations">
-        /// Whether to include property changes caused by animations.
-        /// </param>
-        IDisposable Listen(
-            IAvaloniaPropertyListener listener,
-            bool includeAnimations = true);
+        IDisposable Listen(IAvaloniaPropertyListener listener);
 
         /// <summary>
         /// Gets a <see cref="AvaloniaProperty"/> value.

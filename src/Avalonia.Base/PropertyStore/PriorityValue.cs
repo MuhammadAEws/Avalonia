@@ -78,7 +78,15 @@ namespace Avalonia.PropertyStore
         public IReadOnlyList<IPriorityValueEntry<T>> Entries => _entries;
         Optional<object> IValue.GetValue() => _value.ToObject();
 
-        public void ClearLocalValue() => UpdateEffectiveValue();
+        public void ClearLocalValue()
+        {
+            UpdateEffectiveValue(new AvaloniaPropertyChangedEventArgs<T>(
+                _owner,
+                Property,
+                default,
+                default,
+                BindingPriority.LocalValue));
+        }
 
         public Optional<T> GetValue(BindingPriority maxPriority = BindingPriority.Animation)
         {
@@ -111,7 +119,13 @@ namespace Avalonia.PropertyStore
                 result = entry;
             }
 
-            UpdateEffectiveValue();
+            UpdateEffectiveValue(new AvaloniaPropertyChangedEventArgs<T>(
+                _owner,
+                Property,
+                default,
+                value,
+                priority));
+
             return result;
         }
 
@@ -123,7 +137,7 @@ namespace Avalonia.PropertyStore
             return binding;
         }
 
-        public void CoerceValue() => UpdateEffectiveValue();
+        public void CoerceValue() => UpdateEffectiveValue(null);
 
         void IValueSink.ValueChanged<TValue>(AvaloniaPropertyChangedEventArgs<TValue> change)
         {
@@ -132,7 +146,10 @@ namespace Avalonia.PropertyStore
                 _localValue = default;
             }
 
-            UpdateEffectiveValue();
+            if (change is AvaloniaPropertyChangedEventArgs<T> c)
+            {
+                UpdateEffectiveValue(c);
+            }
         }
 
         void IValueSink.Completed<TValue>(
@@ -141,7 +158,16 @@ namespace Avalonia.PropertyStore
             Optional<TValue> oldValue)
         {
             _entries.Remove((IPriorityValueEntry<T>)entry);
-            UpdateEffectiveValue();
+
+            if (oldValue is Optional<T> o)
+            {
+                UpdateEffectiveValue(new AvaloniaPropertyChangedEventArgs<T>(
+                    _owner,
+                    Property,
+                    o,
+                    default,
+                    entry.Priority));
+            }
         }
 
         private int FindInsertPoint(BindingPriority priority)
@@ -199,7 +225,7 @@ namespace Avalonia.PropertyStore
             return (default, BindingPriority.Unset);
         }
 
-        private void UpdateEffectiveValue()
+        private void UpdateEffectiveValue(AvaloniaPropertyChangedEventArgs<T>? change)
         {
             var (value, priority) = CalculateValue(BindingPriority.Animation);
 
@@ -221,6 +247,12 @@ namespace Avalonia.PropertyStore
                     old,
                     value,
                     Priority));
+            }
+            else if (change is object)
+            {
+                change.MarkInactiveValue();
+                change.SetOldValue(default);
+                _sink.ValueChanged(change);
             }
         }
     }
