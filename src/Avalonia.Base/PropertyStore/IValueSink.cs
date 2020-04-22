@@ -9,7 +9,7 @@ namespace Avalonia.PropertyStore
     /// </summary>
     internal interface IValueSink
     {
-        void ValueChanged<T>(in AvaloniaPropertyChange<T> change);
+        void ValueChanged<T>(AvaloniaPropertyChangedEventArgs<T> change);
 
         void Completed<T>(
             StyledPropertyBase<T> property,

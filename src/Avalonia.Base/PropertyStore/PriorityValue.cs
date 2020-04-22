@@ -123,7 +123,7 @@ namespace Avalonia.PropertyStore
 
         public void CoerceValue() => UpdateEffectiveValue();
 
-        void IValueSink.ValueChanged<TValue>(in AvaloniaPropertyChange<TValue> change)
+        void IValueSink.ValueChanged<TValue>(AvaloniaPropertyChangedEventArgs<TValue> change)
         {
             if (change.Priority == BindingPriority.LocalValue)
             {
@@ -244,7 +244,7 @@ namespace Avalonia.PropertyStore
                     _nonAnimatedValue = value;
                 }
 
-                _sink.ValueChanged(new AvaloniaPropertyChange<T>(
+                _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                     _owner,
                     Property,
                     old,
@@ -259,7 +259,7 @@ namespace Avalonia.PropertyStore
 
                 if (_nonAnimatedValue != _value)
                 {
-                    _sink.ValueChanged(new AvaloniaPropertyChange<T>(
+                    _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                         _owner,
                         Property,
                         old,

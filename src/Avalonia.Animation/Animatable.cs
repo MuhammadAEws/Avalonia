@@ -62,7 +62,7 @@ namespace Avalonia.Animation
             }
         }
 
-        protected override void OnPropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+        protected override void OnPropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             if (_transitions is null || _previousTransitions is null || change.Priority == BindingPriority.Animation)
                 return;

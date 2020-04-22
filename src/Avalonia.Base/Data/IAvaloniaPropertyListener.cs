@@ -11,6 +11,6 @@
         /// </summary>
         /// <typeparam name="T">The property type.</typeparam>
         /// <param name="change">The property change details.</param>
-        void PropertyChanged<T>(in AvaloniaPropertyChange<T> change);
+        void PropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change);
     }
 }

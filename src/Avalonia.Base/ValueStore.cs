@@ -81,7 +81,7 @@ namespace Avalonia
                 throw new ArgumentException($"{value} is not a valid value for '{property.Name}.");
             }
 
-            var change = new AvaloniaPropertyChange<T>(_owner, property, default, value, priority);
+            var change = new AvaloniaPropertyChangedEventArgs<T>(_owner, property, default, value, priority);
             IDisposable? result = null;
 
             if (_values.TryGetValue(property, out var slot))
@@ -156,7 +156,7 @@ namespace Avalonia
                     {
                         var old = TryGetValue(property, true, out var value) ? value : default;
                         _values.Remove(property);
-                        _sink.ValueChanged(new AvaloniaPropertyChange<T>(
+                        _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                             _owner,
                             property,
                             old,
@@ -193,7 +193,7 @@ namespace Avalonia
             return null;
         }
 
-        void IValueSink.ValueChanged<T>(in AvaloniaPropertyChange<T> change)
+        void IValueSink.ValueChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             _sink.ValueChanged(change);
         }
@@ -237,7 +237,7 @@ namespace Avalonia
                 {
                     var old = l.GetValue(true);
                     l.SetValue(value);
-                    _sink.ValueChanged(new AvaloniaPropertyChange<T>(
+                    _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(
                         _owner,
                         property,
                         old,

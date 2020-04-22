@@ -653,7 +653,7 @@ namespace Avalonia.Controls
         /// </remarks>
         protected virtual void OnClosing(CancelEventArgs e) => Closing?.Invoke(this, e);
 
-        protected override void OnPropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+        protected override void OnPropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             if (change.Property == SystemDecorationsProperty)
             {

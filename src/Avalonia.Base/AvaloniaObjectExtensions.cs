@@ -59,16 +59,16 @@ namespace Avalonia
         /// </remarks>
         public static IObservable<T> GetObservable<T>(this IAvaloniaObject o, AvaloniaProperty<T> property)
         {
-            Contract.Requires<ArgumentNullException>(o != null);
-            Contract.Requires<ArgumentNullException>(property != null);
+            o = o ?? throw new ArgumentNullException(nameof(o));
+            property = property ?? throw new ArgumentNullException(nameof(property));
 
             if (property is StyledPropertyBase<T> styled)
             {
-                return (IObservable<T>)o.Listen(styled);
+                return ((AvaloniaPropertyObservable<T>)o.Listen(styled)).ValueAdapter;
             }
             else if (property is DirectPropertyBase<T> direct)
             {
-                return (IObservable<T>)o.Listen(direct);
+                return ((AvaloniaPropertyObservable<T>)o.Listen(direct)).ValueAdapter;
             }
 
             throw new NotImplementedException();
@@ -91,10 +91,19 @@ namespace Avalonia
             this IAvaloniaObject o,
             AvaloniaProperty<T> property)
         {
-            Contract.Requires<ArgumentNullException>(o != null);
-            Contract.Requires<ArgumentNullException>(property != null);
+            o = o ?? throw new ArgumentNullException(nameof(o));
+            property = property ?? throw new ArgumentNullException(nameof(property));
 
-            return (IObservable<BindingValue<T>>)GetObservable(o, property);
+            if (property is StyledPropertyBase<T> styled)
+            {
+                return ((AvaloniaPropertyObservable<T>)o.Listen(styled)).BindingValueAdapter;
+            }
+            else if (property is DirectPropertyBase<T> direct)
+            {
+                return ((AvaloniaPropertyObservable<T>)o.Listen(direct)).BindingValueAdapter;
+            }
+
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -115,7 +124,7 @@ namespace Avalonia
             Contract.Requires<ArgumentNullException>(o != null);
             Contract.Requires<ArgumentNullException>(property != null);
 
-            return new AvaloniaPropertyChangedObservable(o, property);
+            return new AvaloniaPropertyChangedEventArgsdObservable(o, property);
         }
 
         /// <summary>
@@ -438,7 +447,7 @@ namespace Avalonia
         /// <param name="observable">The property changed observable.</param>
         /// <param name="handler">Given a TTarget, returns the handler.</param>
         /// <returns>A disposable that can be used to terminate the subscription.</returns>
-        [Obsolete("Use overload taking Action<TTarget, AvaloniaPropertyChangedEventArgs>.")]
+        [Obsolete("Use overload taking Action<TTarget, AvaloniaPropertyChangedEventArgsdEventArgs>.")]
         public static IDisposable AddClassHandler<TTarget>(
             this IObservable<AvaloniaPropertyChangedEventArgs> observable,
             Func<TTarget, Action<AvaloniaPropertyChangedEventArgs>> handler)

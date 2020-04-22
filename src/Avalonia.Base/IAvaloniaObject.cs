@@ -34,7 +34,7 @@ namespace Avalonia
         /// Whether to include property changes caused by animations.
         /// </param>
         /// <returns>The listener observable.</returns>
-        IObservable<AvaloniaPropertyChange<T>> Listen<T>(
+        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
             StyledPropertyBase<T> property,
             bool includeAnimations = true);
 
@@ -47,7 +47,7 @@ namespace Avalonia
         /// Whether to include property changes caused by animations.
         /// </param>
         /// <returns>The listener observable.</returns>
-        IObservable<AvaloniaPropertyChange<T>> Listen<T>(
+        IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
             DirectPropertyBase<T> property,
             bool includeAnimations = true);
 

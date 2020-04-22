@@ -317,7 +317,7 @@ namespace Avalonia
         /// Whether to include property changes caused by animations.
         /// </param>
         /// <returns>The listener observable.</returns>
-        public IObservable<AvaloniaPropertyChange<T>> Listen<T>(
+        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
             StyledPropertyBase<T> property,
             bool includeAnimations = true)
         {
@@ -327,12 +327,12 @@ namespace Avalonia
 
             if (_listeners.TryGetValue(property, out var existing))
             {
-                return ((AvaloniaPropertyObservable<T>)existing).Get(includeAnimations);
+                return (AvaloniaPropertyObservable<T>)existing;
             }
 
             var listener = AvaloniaPropertyObservable<T>.Create(this, property);
             _listeners.AddValue(property, listener);
-            return listener.Get(includeAnimations);
+            return listener;
         }
 
         /// <summary>
@@ -344,7 +344,7 @@ namespace Avalonia
         /// Whether to include property changes caused by animations.
         /// </param>
         /// <returns>The listener observable.</returns>
-        public IObservable<AvaloniaPropertyChange<T>> Listen<T>(
+        public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(
             DirectPropertyBase<T> property,
             bool includeAnimations = true)
         {
@@ -354,12 +354,12 @@ namespace Avalonia
 
             if (_listeners.TryGetValue(property, out var existing))
             {
-                return ((AvaloniaPropertyObservable<T>)existing).Get(includeAnimations);
+                return (AvaloniaPropertyObservable<T>)existing;
             }
 
             var listener = AvaloniaPropertyObservable<T>.Create(this, property);
             _listeners.AddValue(property, listener);
-            return listener.Get(includeAnimations);
+            return listener;
         }
 
         /// <summary>
@@ -550,7 +550,7 @@ namespace Avalonia
             return _propertyChanged?.GetInvocationList();
         }
 
-        void IValueSink.ValueChanged<T>(in AvaloniaPropertyChange<T> change)
+        void IValueSink.ValueChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             var property = (StyledPropertyBase<T>)change.Property;
             var oldValue = change.OldValue.HasValue ? change.OldValue : GetInheritedOrDefault<T>(property);
@@ -560,7 +560,7 @@ namespace Avalonia
 
             if (!EqualityComparer<T>.Default.Equals(oldValue.Value, newValue.Value))
             {
-                RaisePropertyChanged(new AvaloniaPropertyChange<T>(
+                RaisePropertyChanged(new AvaloniaPropertyChangedEventArgs<T>(
                     this,
                     property,
                     oldValue,
@@ -584,7 +584,7 @@ namespace Avalonia
             IPriorityValueEntry entry,
             Optional<T> oldValue) 
         {
-            var change = new AvaloniaPropertyChange<T>(
+            var change = new AvaloniaPropertyChangedEventArgs<T>(
                 this,
                 property,
                 oldValue,
@@ -677,7 +677,7 @@ namespace Avalonia
         /// Called when a avalonia property changes on the object.
         /// </summary>
         /// <param name="change">The property change details.</param>
-        protected virtual void OnPropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+        protected virtual void OnPropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
         }
 
@@ -694,7 +694,7 @@ namespace Avalonia
             BindingValue<T> newValue,
             BindingPriority priority = BindingPriority.LocalValue)
         {
-            RaisePropertyChanged(new AvaloniaPropertyChange<T>(
+            RaisePropertyChanged(new AvaloniaPropertyChangedEventArgs<T>(
                 this,
                 property,
                 oldValue,
@@ -766,7 +766,7 @@ namespace Avalonia
             return property.GetDefaultValue(GetType());
         }
 
-        protected internal void RaisePropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+        protected internal void RaisePropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             VerifyAccess();
 

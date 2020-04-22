@@ -313,7 +313,7 @@ namespace Avalonia.Controls
             IsPressed = false;
         }
 
-        protected override void OnPropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+        protected override void OnPropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
         {
             base.OnPropertyChanged(change);
 

@@ -279,7 +279,7 @@ namespace Avalonia.Base.UnitTests
             {
             }
 
-            public void ValueChanged<T>(in AvaloniaPropertyChange<T> change)
+            public void ValueChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
             {
             }
         }

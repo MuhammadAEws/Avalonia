@@ -122,7 +122,7 @@ namespace Avalonia
 
         internal override IObservable<object?> RouteListen(IAvaloniaObject o)
         {
-            return new UntypedBindingAdapter<TValue>((AvaloniaPropertyObservable<TValue>)o.Listen(this));
+            return ((AvaloniaPropertyObservable<TValue>)o.Listen(this)).UntypedValueAdapter;
         }
 
         /// <inheritdoc/>

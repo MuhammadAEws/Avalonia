@@ -61,8 +61,11 @@ namespace Avalonia.Base.UnitTests
 
             target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
             {
-                // In the handler for the change to "value1", set the value to "value2".
-                target.SetValue(Class1.FooProperty, "value2");
+                if (x.NewValue.Value == "value1")
+                {
+                    // In the handler for the change to "value1", set the value to "value2".
+                    target.SetValue(Class1.FooProperty, "value2");
+                }
             });
 
             target.Listen(Class1.FooProperty).Skip(1).Subscribe(x =>
@@ -141,14 +144,14 @@ namespace Avalonia.Base.UnitTests
 
             Assert.Equal(2, listener.Received.Count);
 
-            var change = Assert.IsType<AvaloniaPropertyChange<string>>(listener.Received[0]);
+            var change = Assert.IsType<AvaloniaPropertyChangedEventArgs<string>>(listener.Received[0]);
             Assert.Equal("newvalue", change.NewValue.Value);
             Assert.Equal("foodefault", change.OldValue.Value);
             Assert.Equal(BindingPriority.LocalValue, change.Priority);
             Assert.True(change.IsActiveValueChange);
             Assert.False(change.IsOutdated);
 
-            change = Assert.IsType<AvaloniaPropertyChange<string>>(listener.Received[1]);
+            change = Assert.IsType<AvaloniaPropertyChangedEventArgs<string>>(listener.Received[1]);
             Assert.Equal("baaa", change.NewValue.Value);
             Assert.Equal("bardefault", change.OldValue.Value);
             Assert.Equal(BindingPriority.Style, change.Priority);
@@ -183,7 +186,7 @@ namespace Avalonia.Base.UnitTests
             public void Listener_Fires_Only_On_Non_Animated_Property_Changes()
             {
                 var target = new Class1();
-                var changes = new List<AvaloniaPropertyChange<string>>();
+                var changes = new List<AvaloniaPropertyChangedEventArgs<string>>();
 
                 target.Listen(Class1.FooProperty, false).Skip(1).Subscribe(x => changes.Add(x));
 
@@ -201,7 +204,7 @@ namespace Avalonia.Base.UnitTests
             public void Listener_Fires_Only_On_Non_Animated_Property_Changes_With_Binding_Added_Midway()
             {
                 var target = new Class1();
-                var changes = new List<AvaloniaPropertyChange<string>>();
+                var changes = new List<AvaloniaPropertyChangedEventArgs<string>>();
                 var style = new BehaviorSubject<BindingValue<string>>("s1");
 
                 target.Listen(Class1.FooProperty, false).Skip(1).Subscribe(x => changes.Add(x));
@@ -221,8 +224,8 @@ namespace Avalonia.Base.UnitTests
             public void Listener_Fires_Only_On_Non_Animated_Binding_Property_Changes()
             {
                 var target = new Class1();
-                var allChanges = new List<AvaloniaPropertyChange<string>>();
-                var nonAnimatedChanges = new List<AvaloniaPropertyChange<string>>();
+                var allChanges = new List<AvaloniaPropertyChangedEventArgs<string>>();
+                var nonAnimatedChanges = new List<AvaloniaPropertyChangedEventArgs<string>>();
                 var style = new Subject<BindingValue<string>>();
                 var animation = new Subject<BindingValue<string>>();
                 var templatedParent = new Subject<BindingValue<string>>();
@@ -286,23 +289,23 @@ namespace Avalonia.Base.UnitTests
                 Assert.Equal(
                     new[] { "style1", "tp1", "tp2", "style1", "style2", "foodefault" },
                     nonAnimatedChanges.Received
-                        .Cast<AvaloniaPropertyChange<string>>()
+                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
                         .Select(x => x.NewValue.Value)
                         .ToList());
                 Assert.Equal(
                     new[] { true, true, false, false, false, false },
                     nonAnimatedChanges.Received
-                        .Cast<AvaloniaPropertyChange<string>>()
+                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
                         .Select(x => x.IsActiveValueChange)
                         .ToList());
                 Assert.Equal(
                     new[] { "style1", "tp1", "a1", "a2", "foodefault" },
                     allChanges.Received
-                        .Cast<AvaloniaPropertyChange<string>>()
+                        .Cast<AvaloniaPropertyChangedEventArgs<string>>()
                         .Select(x => x.NewValue.Value)
                         .ToList());
                 Assert.True(allChanges.Received
-                    .Cast<AvaloniaPropertyChange<string>>()
+                    .Cast<AvaloniaPropertyChangedEventArgs<string>>()
                     .All(x => x.IsActiveValueChange));
             }
         }
@@ -320,7 +323,7 @@ namespace Avalonia.Base.UnitTests
         {
             public List<object> Received { get; } = new List<object>();
 
-            public void PropertyChanged<T>(in AvaloniaPropertyChange<T> change)
+            public void PropertyChanged<T>(AvaloniaPropertyChangedEventArgs<T> change)
             {
                 Received.Add(change);
             }

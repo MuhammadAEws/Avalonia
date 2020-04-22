@@ -1,24 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
 using Avalonia.Collections.Pooled;
 using Avalonia.Data;
-using Avalonia.Threading;
 
 #nullable enable
 
 namespace Avalonia.Reactive
 {
     internal abstract class AvaloniaPropertyObservable<T> :
-        IObservable<AvaloniaPropertyChange<T>>,
-        IObservable<BindingValue<T>>,
-        IObservable<T>,
+        LightweightObservableBase<AvaloniaPropertyChangedEventArgs<T>>,
         IDescription
     {
         private readonly WeakReference<AvaloniaObject> _owner;
-        private NonAnimatedProxy? _nonAnimated;
-        private PooledQueue<AvaloniaPropertyChange<T>>? _queue;
-        private object? _observer;
-        private bool _isSignalling;
+        private PooledQueue<AvaloniaPropertyChangedEventArgs<T>>? _queue;
+        private AvaloniaPropertyChangedEventArgs<T>? _publishing;
+        private ValueSelector? _valueAdapter;
+        private BindingValueSelector? _bindingValueAdapter;
+        private UntypedValueSelector? _untypedValueAdapter;
 
         private AvaloniaPropertyObservable(AvaloniaObject owner)
         {
@@ -43,7 +40,20 @@ namespace Avalonia.Reactive
 
         public abstract AvaloniaProperty<T> Property { get; }
 
-        public IObservable<AvaloniaPropertyChange<T>> NonAnimated => _nonAnimated ??= new NonAnimatedProxy(this);
+        public IObservable<T> ValueAdapter
+        {
+            get => _valueAdapter ??= new ValueSelector(this);
+        }
+
+        public IObservable<BindingValue<T>> BindingValueAdapter
+        {
+            get => _bindingValueAdapter ??= new BindingValueSelector(this);
+        }
+
+        public IObservable<object?> UntypedValueAdapter
+        {
+            get => _untypedValueAdapter ??= new UntypedValueSelector(this);
+        }
 
         public static AvaloniaPropertyObservable<T> Create(AvaloniaObject o, StyledPropertyBase<T> property)
         {
@@ -55,236 +65,111 @@ namespace Avalonia.Reactive
             return new Direct(o, property);
         }
 
-        public IObservable<AvaloniaPropertyChange<T>> Get(bool includeAnimations)
+        public void Signal(AvaloniaPropertyChangedEventArgs<T> change)
         {
-            return includeAnimations ? this : NonAnimated;
-        }
-
-        public void Signal(AvaloniaPropertyChange<T> change)
-        {
-            if (!_isSignalling)
+            if (SignalCore(change) && _queue is object)
             {
-                _isSignalling = true;
-                SignalCore(change);
-
-                if (_queue is object)
+                while (_queue.Count > 0)
                 {
-                    while (_queue.TryDequeue(out change))
-                    {
-                        SignalCore(change);
-                    }
-
-                    _queue.Dispose();
+                    var queuedChange = _queue.Dequeue();
+                    SignalCore(queuedChange);
                 }
 
-                _isSignalling = false;
-            }
-            else
-            {
-                _queue ??= new PooledQueue<AvaloniaPropertyChange<T>>();
-                _queue.Enqueue(change);
+                _queue.Dispose();
+                _queue = null;
             }
         }
 
-        public IDisposable Subscribe(IObserver<T> observer)
+        protected abstract T GetValue(AvaloniaObject owner);
+        
+        protected override void Initialize() { }
+        protected override void Deinitialize() { }
+
+        protected override void Subscribed(IObserver<AvaloniaPropertyChangedEventArgs<T>> observer, bool first)
         {
-            var result = SubscribeCore(observer, true);
-            var value = GetValue(true);
-
-            if (value.HasValue)
-            {
-                observer.OnNext(value.Value);
-            }
-
-            return result;
-        }
-
-        public IDisposable Subscribe(IObserver<AvaloniaPropertyChange<T>> observer)
-        {
-            return Subscribe(observer, true);
-        }
-
-        public IDisposable Subscribe(
-            IObserver<AvaloniaPropertyChange<T>> observer,
-            bool includeAnimations)
-        {
-            var result = SubscribeCore(observer, includeAnimations);
-
             if (_owner.TryGetTarget(out var owner))
             {
-                var value = GetValue(owner, includeAnimations);
-                var change = new AvaloniaPropertyChange<T>(
+                var e = new AvaloniaPropertyChangedEventArgs<T>(
                     owner,
                     Property,
                     default,
-                    value,
+                    GetValue(owner),
                     BindingPriority.Unset);
-                observer.OnNext(change);
-            }
-
-            return result;
-        }
-
-        public IDisposable Subscribe(IObserver<BindingValue<T>> observer)
-        {
-            var result = SubscribeCore(observer, true);
-            var value = GetValue(true);
-
-            if (value.HasValue)
-            {
-                observer.OnNext(value.Value);
-            }
-
-            return result;
-        }
-
-        protected abstract T GetValue(AvaloniaObject owner, bool includeAnimations);
-
-        private void SignalCore(AvaloniaPropertyChange<T> change)
-        {
-            if (_observer is List<ObserverEntry> list)
-            {
-                foreach (var observer in list)
-                {
-                    if (_queue?.Count > 0 && !change.IsOutdated)
-                    {
-                        change = change.MakeOutdated();
-                    }
-
-                    SignalCore(observer, change);
-                }
-            }
-            else if (_observer is ObserverEntry e)
-            {
-                SignalCore(e, change);
+                observer.OnNext(e);
             }
         }
 
-        private void SignalCore(ObserverEntry entry, AvaloniaPropertyChange<T> change)
+        private bool SignalCore(AvaloniaPropertyChangedEventArgs<T> change)
         {
-            if (entry.Observer is IObserver<AvaloniaPropertyChange<T>> apc)
+            if (_publishing is null)
             {
-                if (entry.IncludeAnimations)
-                {
-                    if (change.IsActiveValueChange)
-                    {
-                        apc.OnNext(change);
-                    }
-                }
-                else
-                {
-                    if (change.Priority > BindingPriority.Animation)
-                    {
-                        apc.OnNext(change);
-                    }
-                }
-            }
-            else if (!change.IsOutdated && change.IsActiveValueChange)
-            {
-                if (entry.Observer is IObserver<BindingValue<T>> bv)
-                {
-                    bv.OnNext(change.NewValue);
-                }
-                else if (entry.Observer is IObserver<T> t)
-                {
-                    t.OnNext(change.NewValue.Value);
-                }
-            }
-        }
-
-        private Optional<T> GetValue(bool includeAnimations)
-        {
-            if (_owner.TryGetTarget(out var owner))
-            {
-                return GetValue(owner, includeAnimations);
-            }
-
-            return default;
-        }
-
-        private IDisposable SubscribeCore(object observer, bool includeAnimations)
-        {
-            observer = observer ?? throw new ArgumentNullException(nameof(observer));
-
-            Dispatcher.UIThread.VerifyAccess();
-
-            if (_observer is null)
-            {
-                _observer = new ObserverEntry(observer, includeAnimations);
+                _publishing = change;
+                PublishNext(change);
+                _publishing = null;
+                return true;
             }
             else
             {
-                if (!(_observer is List<ObserverEntry> list))
-                {
-                    var existing = (ObserverEntry)_observer;
-                    _observer = list = new List<ObserverEntry>();
-                    list.Add(existing);
-                }
-
-                list.Add(new ObserverEntry(observer, includeAnimations));
+                _queue ??= new PooledQueue<AvaloniaPropertyChangedEventArgs<T>>();
+                _queue.Enqueue(change);
+                _publishing.MarkOutdated();
+                return false;
             }
-
-            return new Disposable(this, observer);
         }
 
-        private void Remove(object observer)
+        private class ValueSelector : LightweightObservableBase<T>,
+            IObserver<AvaloniaPropertyChangedEventArgs<T>>
         {
-            if (_observer is ObserverEntry e && e.Observer == observer)
+            private readonly AvaloniaPropertyObservable<T> _source;
+            private IDisposable? _subscription;
+            public ValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+
+            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
             {
-                _observer = null;
-            }
-            else if (_observer is List<ObserverEntry> list)
-            {
-                for (var i = 0; i < list.Count; ++i)
+                if (value.IsActiveValueChange && !value.IsOutdated)
                 {
-                    if (list[i].Observer == observer)
-                    {
-                        list.RemoveAt(i);
-                        break;
-                    }
+                    PublishNext(value.NewValue.Value);
                 }
             }
+
+            protected override void Initialize() => _subscription = _source.Subscribe(this);
+            protected override void Deinitialize() => _subscription?.Dispose();
         }
 
-        private struct ObserverEntry
+        private class BindingValueSelector : LightweightObservableBase<BindingValue<T>>,
+            IObserver<AvaloniaPropertyChangedEventArgs<T>>
         {
-            public ObserverEntry(object observer, bool includeAnimations)
-            {
-                Observer = observer;
-                IncludeAnimations = includeAnimations;
-            }
-
-            public object Observer { get; }
-            public bool IncludeAnimations { get; }
+            private readonly AvaloniaPropertyObservable<T> _source;
+            private IDisposable? _subscription;
+            public BindingValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value) => PublishNext(value.NewValue);
+            protected override void Initialize() => _subscription = _source.Subscribe(this);
+            protected override void Deinitialize() => _subscription?.Dispose();
         }
 
-        private class Disposable : IDisposable
+        private class UntypedValueSelector : LightweightObservableBase<object?>,
+            IObserver<AvaloniaPropertyChangedEventArgs<T>>
         {
-            private readonly AvaloniaPropertyObservable<T> _owner;
-            private readonly object _observer;
+            private readonly AvaloniaPropertyObservable<T> _source;
+            private IDisposable? _subscription;
+            public UntypedValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
 
-            public Disposable(AvaloniaPropertyObservable<T> owner, object observer)
+            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
             {
-                _owner = owner;
-                _observer = observer;
+                if (value.IsActiveValueChange && !value.IsOutdated)
+                {
+                    PublishNext(value.NewValue.ToUntyped());
+                }
             }
 
-            public void Dispose()
-            {
-                _owner.Remove(_observer);
-            }
-        }
-
-        private class NonAnimatedProxy : IObservable<AvaloniaPropertyChange<T>>
-        {
-            private readonly AvaloniaPropertyObservable<T> _owner;
-
-            public NonAnimatedProxy(AvaloniaPropertyObservable<T> owner) => _owner = owner;
-
-            public IDisposable Subscribe(IObserver<AvaloniaPropertyChange<T>> observer)
-            {
-                return _owner.Subscribe(observer, false);
-            }
+            protected override void Initialize() => _subscription = _source.Subscribe(this);
+            protected override void Deinitialize() => _subscription?.Dispose();
         }
 
         private class Styled : AvaloniaPropertyObservable<T>
@@ -298,13 +183,7 @@ namespace Avalonia.Reactive
             }
 
             public override AvaloniaProperty<T> Property => _property;
-            
-            protected override T GetValue(AvaloniaObject owner, bool includeAnimations)
-            {
-                return includeAnimations ?
-                    owner.GetValue(_property) :
-                    owner.GetAnimationBaseValue(_property);
-            }
+            protected override T GetValue(AvaloniaObject owner) => owner.GetValue(_property);
         }
 
         private class Direct : AvaloniaPropertyObservable<T>
@@ -318,11 +197,7 @@ namespace Avalonia.Reactive
             }
 
             public override AvaloniaProperty<T> Property => _property;
-
-            protected override T GetValue(AvaloniaObject owner, bool includeAnimations)
-            {
-                return owner.GetValue(_property);
-            }
+            protected override T GetValue(AvaloniaObject owner) => owner.GetValue(_property);
         }
     }
 }

@@ -106,7 +106,7 @@ namespace Avalonia.PropertyStore
                 _value = value.ToOptional();
             }
 
-            _sink.ValueChanged(new AvaloniaPropertyChange<T>(_owner, Property, old, value, Priority));
+            _sink.ValueChanged(new AvaloniaPropertyChangedEventArgs<T>(_owner, Property, old, value, Priority));
         }
     }
 }
