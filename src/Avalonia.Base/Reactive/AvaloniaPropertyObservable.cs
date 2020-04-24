@@ -1,18 +1,21 @@
 ﻿using System;
+using System.Collections.Generic;
 using Avalonia.Collections.Pooled;
 using Avalonia.Data;
+using Avalonia.Threading;
 
 #nullable enable
 
 namespace Avalonia.Reactive
 {
     internal abstract class AvaloniaPropertyObservable<T> :
-        LightweightObservableBase<AvaloniaPropertyChangedEventArgs<T>>,
+        IObservable<AvaloniaPropertyChangedEventArgs<T>>,
         IDescription
     {
         private readonly WeakReference<AvaloniaObject> _owner;
+        private object? _observer;
         private PooledQueue<AvaloniaPropertyChangedEventArgs<T>>? _queue;
-        private AvaloniaPropertyChangedEventArgs<T>? _publishing;
+        private AvaloniaPropertyChangedEventArgs<T>? _signalling;
         private ValueSelector? _valueAdapter;
         private BindingValueSelector? _bindingValueAdapter;
         private UntypedValueSelector? _untypedValueAdapter;
@@ -96,119 +99,189 @@ namespace Avalonia.Reactive
             }
         }
 
+        public IDisposable Subscribe(IObserver<AvaloniaPropertyChangedEventArgs<T>> observer)
+        {
+            observer = observer ?? throw new ArgumentNullException(nameof(observer));
+            return SubscribeCore(new ObserverEntry(ObserverType.AvaloniaPropertyChange, observer));
+        }
+
         protected abstract T GetValue(AvaloniaObject owner);
         
-        protected override void Initialize() { }
-        protected override void Deinitialize() { }
+        private IDisposable SubscribeCore(ObserverEntry entry)
+        {
+            Dispatcher.UIThread.VerifyAccess();
+
+            if (_observer is null)
+            {
+                _observer = entry;
+            }
+            else
+            {
+                if (!(_observer is List<ObserverEntry> list))
+                {
+                    var existing = (ObserverEntry)_observer;
+                    _observer = list = new List<ObserverEntry>();
+                    list.Add(existing);
+                }
+
+                list.Add(entry);
+            }
+
+            return new Disposable(this, entry);
+        }
 
         private bool SignalCore(AvaloniaPropertyChangedEventArgs<T> change)
         {
-            if (_publishing is null)
+            if (_signalling is null)
             {
-                _publishing = change;
-                PublishNext(change);
-                _publishing = null;
+                _signalling = change;
+
+                if (_observer is List<ObserverEntry> list)
+                {
+                    foreach (var observer in list)
+                    {
+                        if (_queue?.Count > 0 && !change.IsOutdated)
+                        {
+                            change.MarkOutdated();
+                        }
+
+                        SignalCore(observer, change);
+                    }
+                }
+                else if (_observer is ObserverEntry e)
+                {
+                    SignalCore(e, change);
+                }
+
+                _signalling = null;
                 return true;
             }
             else
             {
                 _queue ??= new PooledQueue<AvaloniaPropertyChangedEventArgs<T>>();
                 _queue.Enqueue(change);
-                _publishing.MarkOutdated();
+                _signalling.MarkOutdated();
                 return false;
             }
         }
 
-        private class ValueSelector : LightweightObservableBase<T>,
-            IObserver<AvaloniaPropertyChangedEventArgs<T>>
+        private void SignalCore(ObserverEntry entry, AvaloniaPropertyChangedEventArgs<T> change)
         {
-            private readonly AvaloniaPropertyObservable<T> _source;
-            private IDisposable? _subscription;
-            public ValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
-            public void OnCompleted() { }
-            public void OnError(Exception error) { }
-
-            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
+            if (entry.Type == ObserverType.AvaloniaPropertyChange)
             {
-                if (value.IsActiveValueChange && !value.IsOutdated)
-                {
-                    PublishNext(value.NewValue.Value);
-                }
+                ((IObserver<AvaloniaPropertyChangedEventArgs<T>>)entry.Observer).OnNext(change);
             }
-
-            protected override void Initialize() => _subscription = _source.Subscribe(this);
-            protected override void Deinitialize() => _subscription?.Dispose();
-
-            protected override void Subscribed(IObserver<T> observer, bool first)
+            else if (!change.IsOutdated && change.IsActiveValueChange)
             {
-                var value = _source.GetValue();
-
-                if (value.HasValue)
+                switch (entry.Type)
                 {
-                    observer.OnNext(value.Value);
+                    case ObserverType.BindingValue:
+                        ((IObserver<BindingValue<T>>)entry.Observer).OnNext(change.NewValue);
+                        break;
+                    case ObserverType.TypedValue:
+                        ((IObserver<T>)entry.Observer).OnNext(change.NewValue.Value);
+                        break;
+                    case ObserverType.UntypedValue:
+                        ((IObserver<object?>)entry.Observer).OnNext(change.NewValue.ToUntyped());
+                        break;
                 }
             }
         }
 
-        private class BindingValueSelector : LightweightObservableBase<BindingValue<T>>,
-            IObserver<AvaloniaPropertyChangedEventArgs<T>>
+        private void Remove(ObserverEntry entry)
         {
-            private readonly AvaloniaPropertyObservable<T> _source;
-            private IDisposable? _subscription;
-            public BindingValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
-            public void OnCompleted() { }
-            public void OnError(Exception error) { }
-
-            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
+            if (_observer is ObserverEntry e &&
+                e.Type == entry.Type &&
+                e.Observer == entry.Observer)
             {
-                if (value.IsActiveValueChange && !value.IsOutdated)
-                {
-                    PublishNext(value.NewValue);
-                }
+                _observer = null;
             }
-
-            protected override void Initialize() => _subscription = _source.Subscribe(this);
-            protected override void Deinitialize() => _subscription?.Dispose();
-
-            protected override void Subscribed(IObserver<BindingValue<T>> observer, bool first)
+            else if (_observer is List<ObserverEntry> list)
             {
-                var value = _source.GetValue();
-
-                if (value.HasValue)
+                for (var i = 0; i < list.Count; ++i)
                 {
-                    observer.OnNext(value.Value);
+                    if (list[i].Type == entry.Type && list[i].Observer == entry.Observer)
+                    {
+                        list.RemoveAt(i);
+                    }
                 }
             }
         }
 
-        private class UntypedValueSelector : LightweightObservableBase<object?>,
-            IObserver<AvaloniaPropertyChangedEventArgs<T>>
+        private class Disposable : IDisposable
         {
-            private readonly AvaloniaPropertyObservable<T> _source;
-            private IDisposable? _subscription;
-            public UntypedValueSelector(AvaloniaPropertyObservable<T> source) => _source = source;
-            public void OnCompleted() { }
-            public void OnError(Exception error) { }
+            private readonly AvaloniaPropertyObservable<T> _owner;
+            private readonly ObserverEntry _entry;
 
-            public void OnNext(AvaloniaPropertyChangedEventArgs<T> value)
+            public Disposable(AvaloniaPropertyObservable<T> owner, ObserverEntry entry)
             {
-                if (value.IsActiveValueChange && !value.IsOutdated)
-                {
-                    PublishNext(value.NewValue.ToUntyped());
-                }
+                _owner = owner;
+                _entry = entry;
             }
 
-            protected override void Initialize() => _subscription = _source.Subscribe(this);
-            protected override void Deinitialize() => _subscription?.Dispose();
-
-            protected override void Subscribed(IObserver<object?> observer, bool first)
+            public void Dispose()
             {
-                var value = _source.GetValue();
+                _owner.Remove(_entry);
+            }
+        }
+
+        private class ValueSelector : IObservable<T>
+        {
+            private readonly AvaloniaPropertyObservable<T> _owner;
+            public ValueSelector(AvaloniaPropertyObservable<T> owner) => _owner = owner;
+            public IDisposable Subscribe(IObserver<T> observer)
+            {
+                observer = observer ?? throw new ArgumentNullException(nameof(observer));
+
+                var value = _owner.GetValue();
+                var result = _owner.SubscribeCore(new ObserverEntry(ObserverType.TypedValue, observer));
 
                 if (value.HasValue)
                 {
                     observer.OnNext(value.Value);
                 }
+
+                return result;
+            }
+        }
+
+        private class BindingValueSelector : IObservable<BindingValue<T>>
+        {
+            private readonly AvaloniaPropertyObservable<T> _owner;
+            public BindingValueSelector(AvaloniaPropertyObservable<T> owner) => _owner = owner;
+
+            public IDisposable Subscribe(IObserver<BindingValue<T>> observer)
+            {
+                observer = observer ?? throw new ArgumentNullException(nameof(observer));
+
+                var value = _owner.GetValue();
+                var result = _owner.SubscribeCore(new ObserverEntry(ObserverType.BindingValue, observer));
+
+                if (value.HasValue)
+                {
+                    observer.OnNext(value.Value);
+                }
+
+                return result;
+            }
+        }
+
+        private class UntypedValueSelector : IObservable<object?>
+        {
+            private readonly AvaloniaPropertyObservable<T> _owner;
+            public UntypedValueSelector(AvaloniaPropertyObservable<T> owner) => _owner = owner;
+
+            public IDisposable Subscribe(IObserver<object?> observer)
+            {
+                var value = _owner.GetValue();
+                var result = _owner.SubscribeCore(new ObserverEntry(ObserverType.UntypedValue, observer));
+
+                if (value.HasValue)
+                {
+                    observer.OnNext(value.Value);
+                }
+
+                return result;
             }
         }
 
@@ -238,6 +311,26 @@ namespace Avalonia.Reactive
 
             public override AvaloniaProperty<T> Property => _property;
             protected override T GetValue(AvaloniaObject owner) => owner.GetValue(_property);
+        }
+
+        private enum ObserverType
+        {
+            AvaloniaPropertyChange,
+            BindingValue,
+            TypedValue,
+            UntypedValue,
+        }
+
+        private struct ObserverEntry
+        {
+            public ObserverEntry(ObserverType type, object observer)
+            {
+                Type = type;
+                Observer = observer;
+            }
+
+            public ObserverType Type { get; }
+            public object Observer { get; }
         }
     }
 }
