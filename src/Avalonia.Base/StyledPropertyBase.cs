@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Reactive.Linq;
 using Avalonia.Data;
 using Avalonia.Reactive;
 using Avalonia.Utilities;
@@ -241,7 +242,18 @@ namespace Avalonia
 
         internal override IObservable<object> RouteListen(IAvaloniaObject o)
         {
-            return ((AvaloniaPropertyObservable<TValue>)o.Listen(this)).UntypedValueAdapter;
+            var listener = o.Listen(this);
+
+            if (o is AvaloniaObject)
+            {
+                return ((AvaloniaPropertyObservable<TValue>)listener).UntypedValueAdapter;
+            }
+            else
+            {
+                return listener.Where(x => x.IsActiveValueChange)
+                    .Select(x => x.NewValue.Value)
+                    .StartWith(o.GetValue(property));
+            }
         }
 
         private object GetDefaultBoxedValue(Type type)

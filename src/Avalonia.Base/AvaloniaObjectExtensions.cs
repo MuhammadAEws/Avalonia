@@ -62,16 +62,23 @@ namespace Avalonia
             o = o ?? throw new ArgumentNullException(nameof(o));
             property = property ?? throw new ArgumentNullException(nameof(property));
 
-            if (property is StyledPropertyBase<T> styled)
+            var listener = property switch
             {
-                return ((AvaloniaPropertyObservable<T>)o.Listen(styled)).ValueAdapter;
-            }
-            else if (property is DirectPropertyBase<T> direct)
-            {
-                return ((AvaloniaPropertyObservable<T>)o.Listen(direct)).ValueAdapter;
-            }
+                StyledPropertyBase<T> s => o.Listen(s),
+                DirectPropertyBase<T> d => o.Listen(d),
+                _ => throw new NotSupportedException("Unexpected AvaloniaProperty type."),
+            };
 
-            throw new NotImplementedException();
+            if (o is AvaloniaObject)
+            {
+                return ((AvaloniaPropertyObservable<T>)listener).ValueAdapter;
+            }
+            else
+            {
+                return listener.Where(x => x.IsActiveValueChange)
+                    .Select(x => x.NewValue.Value)
+                    .StartWith(o.GetValue(property));
+            }
         }
 
         /// <summary>
@@ -94,37 +101,23 @@ namespace Avalonia
             o = o ?? throw new ArgumentNullException(nameof(o));
             property = property ?? throw new ArgumentNullException(nameof(property));
 
-            if (property is StyledPropertyBase<T> styled)
+            var listener = property switch
             {
-                return ((AvaloniaPropertyObservable<T>)o.Listen(styled)).BindingValueAdapter;
-            }
-            else if (property is DirectPropertyBase<T> direct)
+                StyledPropertyBase<T> s => o.Listen(s),
+                DirectPropertyBase<T> d => o.Listen(d),
+                _ => throw new NotSupportedException("Unexpected AvaloniaProperty type."),
+            };
+
+            if (o is AvaloniaObject)
             {
-                return ((AvaloniaPropertyObservable<T>)o.Listen(direct)).BindingValueAdapter;
+                return ((AvaloniaPropertyObservable<T>)listener).BindingValueAdapter;
             }
-
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Gets an observable that listens for property changed events for an
-        /// <see cref="AvaloniaProperty"/>.
-        /// </summary>
-        /// <param name="o">The object.</param>
-        /// <param name="property">The property.</param>
-        /// <returns>
-        /// An observable which when subscribed pushes the property changed event args
-        /// each time a <see cref="IAvaloniaObject.PropertyChanged"/> event is raised
-        /// for the specified property.
-        /// </returns>
-        public static IObservable<AvaloniaPropertyChangedEventArgs> GetPropertyChangedObservable(
-            this IAvaloniaObject o,
-            AvaloniaProperty property)
-        {
-            Contract.Requires<ArgumentNullException>(o != null);
-            Contract.Requires<ArgumentNullException>(property != null);
-
-            return new AvaloniaPropertyChangedEventArgsdObservable(o, property);
+            else
+            {
+                return listener.Where(x => x.IsActiveValueChange)
+                    .Select(x => x.NewValue)
+                    .StartWith(o.GetValue(property));
+            }
         }
 
         /// <summary>
