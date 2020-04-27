@@ -309,12 +309,7 @@ namespace Avalonia
             return _values?.IsSet(property) ?? false;
         }
 
-        /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/>.
-        /// </summary>
-        /// <typeparam name="T">The type of the property.</typeparam>
-        /// <param name="property">The property.</param>
-        /// <returns>The listener observable.</returns>
+        /// <inheritdoc/>
         public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(StyledPropertyBase<T> property)
         {
             property = property ?? throw new ArgumentNullException(nameof(property));
@@ -331,12 +326,7 @@ namespace Avalonia
             return listener;
         }
 
-        /// <summary>
-        /// Gets a listener for an <see cref="AvaloniaProperty"/>.
-        /// </summary>
-        /// <typeparam name="T">The type of the property.</typeparam>
-        /// <param name="property">The property.</param>
-        /// <returns>The listener observable.</returns>
+        /// <inheritdoc/>
         public IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(DirectPropertyBase<T> property)
         {
             property = property ?? throw new ArgumentNullException(nameof(property));

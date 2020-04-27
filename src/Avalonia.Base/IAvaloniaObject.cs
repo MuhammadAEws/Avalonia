@@ -26,19 +26,36 @@ namespace Avalonia
         void ClearValue<T>(DirectPropertyBase<T> property);
 
         /// <summary>
-        /// Listens to changes in an <see cref="AvaloniaProperty"/> on the object.
+        /// Listens to changes in an <see cref="AvaloniaProperty"/> on this object.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
         /// <returns>The listener observable.</returns>
+        /// <remarks>
+        /// A listener observable fires for each change to the requested property, and can fire even
+        /// when the change did not result in a change to the final value of the property because
+        /// a value with a higher priority is present. 
+        ///
+        /// This is a low-level API intended for use in advanced scenarios. For most cases, you will
+        /// want to instead call the <see cref="AvaloniaObjectExtensions.GetObservable{T}(IAvaloniaObject, AvaloniaProperty{T})"/>
+        /// extension method.
+        /// </remarks>
         IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(StyledPropertyBase<T> property);
 
         /// <summary>
-        /// Listens to changes in an <see cref="AvaloniaProperty"/> on the object.
+        /// Listens to changes in an <see cref="AvaloniaProperty"/> on this object.
         /// </summary>
         /// <typeparam name="T">The type of the property.</typeparam>
         /// <param name="property">The property.</param>
-        /// <returns>The listener observable.</returns>
+        /// <remarks>
+        /// A listener observable fires for each change to the requested property, and can fire even
+        /// when the change did not result in a change to the final value of the property because
+        /// a value with a higher priority is present. 
+        ///
+        /// This is a low-level API intended for use in advanced scenarios. For most cases, you will
+        /// want to instead call the <see cref="AvaloniaObjectExtensions.GetObservable{T}(IAvaloniaObject, AvaloniaProperty{T})"/>
+        /// extension method.
+        /// </remarks>
         IObservable<AvaloniaPropertyChangedEventArgs<T>> Listen<T>(DirectPropertyBase<T> property);
 
         /// <summary>
