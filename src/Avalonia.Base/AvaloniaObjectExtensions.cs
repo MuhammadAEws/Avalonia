@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Avalonia.Data;
 using Avalonia.Reactive;
+using Avalonia.Utilities;
 
 namespace Avalonia
 {
@@ -41,7 +42,7 @@ namespace Avalonia
             Contract.Requires<ArgumentNullException>(o != null);
             Contract.Requires<ArgumentNullException>(property != null);
 
-            return property.RouteListen(o);
+            return GetObservableRouter.Instance.Route(o, property);
         }
 
         /// <summary>
@@ -69,13 +70,13 @@ namespace Avalonia
                 _ => throw new NotSupportedException("Unexpected AvaloniaProperty type."),
             };
 
-            if (o is AvaloniaObject)
+            if (listener is AvaloniaPropertyObservable<T> apo)
             {
-                return ((AvaloniaPropertyObservable<T>)listener).ValueAdapter;
+                return apo.ValueAdapter;
             }
             else
             {
-                return listener.Where(x => x.IsActiveValueChange)
+                return listener.Where(x => x.IsActiveValueChange && !x.IsOutdated)
                     .Select(x => x.NewValue.Value)
                     .StartWith(o.GetValue(property));
             }
@@ -108,13 +109,13 @@ namespace Avalonia
                 _ => throw new NotSupportedException("Unexpected AvaloniaProperty type."),
             };
 
-            if (o is AvaloniaObject)
+            if (listener is AvaloniaPropertyObservable<T> apo)
             {
-                return ((AvaloniaPropertyObservable<T>)listener).BindingValueAdapter;
+                return apo.BindingValueAdapter;
             }
             else
             {
-                return listener.Where(x => x.IsActiveValueChange)
+                return listener.Where(x => x.IsActiveValueChange && !x.IsOutdated)
                     .Select(x => x.NewValue)
                     .StartWith(o.GetValue(property));
             }
@@ -494,6 +495,58 @@ namespace Avalonia
                 bool enableDataValidation = false)
             {
                 return InstancedBinding.OneWay(_source);
+            }
+        }
+
+        private class GetObservableRouter : IAvaloniaPropertyVisitor<GetObservableRouter.Data>
+        {
+            public static readonly GetObservableRouter Instance = new GetObservableRouter();
+
+            public IObservable<object> Route(IAvaloniaObject o, AvaloniaProperty p)
+            {
+                var data = new Data { Source = o };
+                p.Accept(this, ref data);
+                return data.Result;
+            }
+
+            public void Visit<T>(StyledPropertyBase<T> property, ref Data data)
+            {
+                var listener = data.Source.Listen(property);
+
+                if (listener is AvaloniaPropertyObservable<T> apo)
+                {
+                    data.Result = apo.UntypedValueAdapter;
+                }
+                else
+                {
+                    data.Result = listener.Where(x => x.IsActiveValueChange && !x.IsOutdated)
+                        .Select(x => x.NewValue.ToUntyped())
+                        .StartWith(data.Source.GetValue(property));
+
+                }
+            }
+
+            public void Visit<T>(DirectPropertyBase<T> property, ref Data data)
+            {
+                var listener = data.Source.Listen(property);
+
+                if (listener is AvaloniaPropertyObservable<T> apo)
+                {
+                    data.Result = apo.UntypedValueAdapter;
+                }
+                else
+                {
+                    data.Result = listener.Where(x => x.IsActiveValueChange && !x.IsOutdated)
+                        .Select(x => x.NewValue.ToUntyped())
+                        .StartWith(data.Source.GetValue(property));
+
+                }
+            }
+
+            public struct Data
+            {
+                public IAvaloniaObject Source;
+                public IObservable<object> Result;
             }
         }
     }

@@ -240,22 +240,6 @@ namespace Avalonia
             o.InheritanceParentChanged(this, oldParent);
         }
 
-        internal override IObservable<object> RouteListen(IAvaloniaObject o)
-        {
-            var listener = o.Listen(this);
-
-            if (o is AvaloniaObject)
-            {
-                return ((AvaloniaPropertyObservable<TValue>)listener).UntypedValueAdapter;
-            }
-            else
-            {
-                return listener.Where(x => x.IsActiveValueChange)
-                    .Select(x => x.NewValue.Value)
-                    .StartWith(o.GetValue(property));
-            }
-        }
-
         private object GetDefaultBoxedValue(Type type)
         {
             Contract.Requires<ArgumentNullException>(type != null);

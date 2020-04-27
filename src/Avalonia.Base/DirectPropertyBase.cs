@@ -120,11 +120,6 @@ namespace Avalonia
             return o.GetValue<TValue>(this);
         }
 
-        internal override IObservable<object?> RouteListen(IAvaloniaObject o)
-        {
-            return ((AvaloniaPropertyObservable<TValue>)o.Listen(this)).UntypedValueAdapter;
-        }
-
         /// <inheritdoc/>
         internal override IDisposable? RouteSetValue(
             IAvaloniaObject o,

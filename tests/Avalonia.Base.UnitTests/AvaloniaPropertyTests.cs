@@ -156,11 +156,6 @@ namespace Avalonia.Base.UnitTests
             {
                 throw new NotImplementedException();
             }
-
-            internal override IObservable<object> RouteListen(IAvaloniaObject o)
-            {
-                throw new NotImplementedException();
-            }
         }
 
         private class Class1 : AvaloniaObject
