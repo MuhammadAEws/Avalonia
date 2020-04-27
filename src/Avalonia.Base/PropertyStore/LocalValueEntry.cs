@@ -19,7 +19,7 @@ namespace Avalonia.PropertyStore
         
         public Optional<T> GetValue(BindingPriority maxPriority)
         {
-            return BindingPriority.LocalValue >= maxPriority ? _value : default;
+            return BindingPriority.LocalValue >= maxPriority ? _value : Optional<T>.Empty;
         }
 
         public void SetValue(T value) => _value = value;

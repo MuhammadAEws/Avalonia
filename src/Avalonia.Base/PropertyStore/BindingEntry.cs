@@ -45,7 +45,7 @@ namespace Avalonia.PropertyStore
 
         public Optional<T> GetValue(BindingPriority maxPriority)
         {
-            return Priority >= maxPriority ? _value : default;
+            return Priority >= maxPriority ? _value : Optional<T>.Empty;
         }
 
         public void Dispose()

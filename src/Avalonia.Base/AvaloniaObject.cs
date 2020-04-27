@@ -265,18 +265,19 @@ namespace Avalonia
             return registered.InvokeGetter(this);
         }
 
-        /// <summary>
-        /// Gets a <see cref="AvaloniaProperty"/> value, disregarding any possible animated value.
-        /// </summary>
-        /// <typeparam name="T">The type of the property.</typeparam>
-        /// <param name="property">The property.</param>
-        /// <returns>The value.</returns>
-        public T GetAnimationBaseValue<T>(StyledPropertyBase<T> property)
+        /// <inheritdoc/>
+        public Optional<T> GetBaseValue<T>(StyledPropertyBase<T> property, BindingPriority maxPriority)
         {
             property = property ?? throw new ArgumentNullException(nameof(property));
             VerifyAccess();
 
-            return GetValueOrInheritedOrDefault(property, BindingPriority.LocalValue);
+            if (_values is object &&
+                _values.TryGetValue(property, maxPriority, out var value))
+            {
+                return value;
+            }
+
+            return default;
         }
 
         /// <summary>

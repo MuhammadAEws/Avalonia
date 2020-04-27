@@ -33,7 +33,7 @@ namespace Avalonia.PropertyStore
 
         public Optional<T> GetValue(BindingPriority maxPriority = BindingPriority.Animation)
         {
-            return Priority >= maxPriority ? _value : default;
+            return Priority >= maxPriority ? _value : Optional<T>.Empty;
         }
 
         public void Dispose() => _sink.Completed(Property, this, _value);
